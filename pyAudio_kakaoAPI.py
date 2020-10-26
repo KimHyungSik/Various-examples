@@ -12,7 +12,7 @@ WAVE_OUTPUT_FILENAME = "output.wav"
 
 #for kakao setting
 kakao_speech_url = "https://kakaoi-newtone-openapi.kakao.com/v1/recognize"
-rest_api_key = "51712b5e92f993719878dc18fdb305d6";
+rest_api_key = 
 
 headers = {
     "Content-Type" : "application/octet-stream",

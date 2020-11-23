@@ -1,27 +1,23 @@
 import pandas as pd
 import numpy as np
+import random
 from konlpy.tag import Okt
 from konlpy.tag import Kkma
+import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 import joblib
-
 
 okt = Okt()
 kkma = Kkma()
 order_data = pd.read_excel('./order_semple.xlsx', header=0)
 order_data['description'] = order_data['description'].str.replace("[^ㄱ-ㅎㅏ-ㅣ가-힣 ]","")
 
-f = open("text_space_model.txt", 'w', encoding='UTF-8')
-for x in order_data['description']:
-    f.write(str(x)+"\n")
-f.close()
-
-
-stopwords = ['의','로','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다','저기요','주세요', '할게요']
+stopwords = ['갈다', '메뉴','보여줘','보여주다','보이다', '줄다', '이요','요','의','로','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다','저기요','주세요', '할게요']
 
 X_train = []
+
 for sentence in order_data['description']:
     temp_X = okt.morphs(sentence, stem=True) # 토큰화
     temp_X = [word for word in temp_X if not word in stopwords]  # 불용어 제거
@@ -49,15 +45,26 @@ for key, value in tokenizer.word_counts.items():
 #단어 수가 2이하인 문자 제거 + oov토큰 대비
 vocab_size = total_cnt - rare_cnt + 2
 
-tokenizer = Tokenizer(vocab_size, oov_token = 'OOV')
+dataSet = list(zip(X_train, y_train))
+
+#random.shuffle(dataSet)
+#X_train, y_train = zip(*dataSet)
+
+tokenizer = Tokenizer(len(X_train), oov_token = 'OOV')
 tokenizer.fit_on_texts(X_train)
 
-sequences= tokenizer.texts_to_sequences(X_train)
-X_train = tokenizer.texts_to_sequences(X_train)
-X_train = pad_sequences(X_train, maxlen = 5)
+print(type(tokenizer.word_index))
 
-tree_clf = DecisionTreeClassifier(max_depth=4, random_state=0)
-tree_clf.fit(X_train, y_train)
+X_train = tokenizer.texts_to_sequences(X_train)
+X_train = pad_sequences(X_train, maxlen = 4)
+
+rnd_clf = RandomForestClassifier(criterion='entropy', random_state=4,n_estimators=1100, oob_score=True, max_leaf_nodes=10, n_jobs=-1)
+rnd_clf.fit(X_train, y_train)
+
+def shuffle_in_unison(a, b):
+    e_elem = a.shape[0]
+    indeces = np.random.choice(e_elem, size=e_elem, replace=False)
+    return a[indeces], b[indeces]
 
 #띄어쓰기 함수
 def spacing_okt(wrongSentence):
@@ -65,7 +72,7 @@ def spacing_okt(wrongSentence):
     corrected = ""
     for i in tagged:
         print(i)
-        if i[1] in ('Josa', 'PreEomi', 'Eomi', 'Suffix', 'Punctuation'):
+        if i[1] in ('Josa', 'PreEomi', 'Eomi', 'Suffix', 'Punctuation', 'Modifier'):
             corrected += i[0]
         else:
             corrected += " "+i[0]
@@ -101,15 +108,28 @@ def rndModel(new_sentence):
       print("이해할수 없는 단어")
 
   else:
+      deleteList = []
+      for x in range(len(encoded[0])):
+          print(x)
+          print(type(x))
+          print(encoded[0][x])
+          if encoded[0][x] == 1:
+              deleteList.append(x)
+      deleteList.sort(reverse=True)
+
+      if len(deleteList):
+          for x in deleteList:
+              encoded[0].pop(x)
+
       # 패딩
-      pad_new = pad_sequences(encoded, maxlen=5)
+      pad_new = pad_sequences(encoded, maxlen=4)
       print(pad_new)
 
       #예측
-      score = float(tree_clf.predict(pad_new))
+      score = float(rnd_clf.predict(pad_new))
       tempData = pd.DataFrame([[text,int(score)]], columns={'order', 'description'})
       order_data = order_data.append(tempData, ignore_index=True)
-      print(tree_clf.predict(pad_new))
+      print(rnd_clf.predict(pad_new))
 
 def dataWrite():
       order_data.to_excel(excel_writer='order_semple.xlsx', index=False)
@@ -121,7 +141,9 @@ while(1):
         dataWrite()
     elif(temp =='stopModel'):
         joblib.dump(tokenizer, 'token.pkl')
-        joblib.dump(tree_clf, 'nlp_sample.pkl')
+        joblib.dump(rnd_clf, 'nlp_sample.pkl')
+        joblib.dump(rndModel, 'rndModel.pkl')
+        joblib.dump(pad_sequences, 'pad_sequences.pkl')
         break
     else:
         rndModel(temp)
